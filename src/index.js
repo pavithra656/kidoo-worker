@@ -3,7 +3,7 @@ export default {
     // Allow requests from your GitHub Pages site
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
 
@@ -27,6 +27,71 @@ export default {
         return new Response('Setup error: ' + setupErr.message, {
           status: 500,
           headers: corsHeaders,
+        });
+      }
+    }
+
+    // Book an appointment: checks the slot is free, then saves it.
+    // POST /book with JSON body: { patient_name, patient_email, appointment_date, appointment_time, reason }
+    if (request.method === 'POST' && url.pathname === '/book') {
+      try {
+        const body = await request.json();
+        const { patient_name, patient_email, appointment_date, appointment_time, reason } = body;
+
+        // Basic validation - required fields must be present
+        if (!patient_name || !patient_email || !appointment_date || !appointment_time) {
+          return new Response(JSON.stringify({ error: 'Missing required fields: patient_name, patient_email, appointment_date, appointment_time' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Check if this exact date+time is already booked (status = 'booked', not cancelled)
+        const existing = await env.DB.prepare(
+          "SELECT id FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'booked'"
+        ).bind(appointment_date, appointment_time).first();
+
+        if (existing) {
+          return new Response(JSON.stringify({ error: 'That slot is already booked. Please choose a different time.' }), {
+            status: 409,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Slot is free - insert the booking
+        const result = await env.DB.prepare(
+          "INSERT INTO appointments (patient_name, patient_email, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)"
+        ).bind(patient_name, patient_email, appointment_date, appointment_time, reason || null).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Appointment booked for ${appointment_date} at ${appointment_time}`,
+          appointment_id: result.meta.last_row_id,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (bookErr) {
+        return new Response(JSON.stringify({ error: bookErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // View all appointments (simple admin check)
+    // GET /appointments
+    if (request.method === 'GET' && url.pathname === '/appointments') {
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM appointments ORDER BY appointment_date, appointment_time"
+        ).all();
+        return new Response(JSON.stringify(results, null, 2), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (listErr) {
+        return new Response(JSON.stringify({ error: listErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     }
@@ -100,3 +165,4 @@ export default {
   },
 };
 
+  
