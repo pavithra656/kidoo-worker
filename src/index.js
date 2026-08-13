@@ -63,6 +63,33 @@ export default {
           "INSERT INTO appointments (patient_name, patient_email, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)"
         ).bind(patient_name, patient_email, appointment_date, appointment_time, reason || null).run();
 
+        // Send an email notification (best-effort - booking still succeeds even if email fails)
+        try {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            },
+            body: JSON.stringify({
+              from: 'Kidoo <onboarding@resend.dev>',
+              to: 'kidooappointment@gmail.com',
+              subject: `New Appointment: ${patient_name} on ${appointment_date}`,
+              html: `
+                <h2>New Appointment Booked 📅</h2>
+                <p><b>Name:</b> ${patient_name}</p>
+                <p><b>Email:</b> ${patient_email}</p>
+                <p><b>Date:</b> ${appointment_date}</p>
+                <p><b>Time:</b> ${appointment_time}</p>
+                <p><b>Reason:</b> ${reason || 'Not specified'}</p>
+              `,
+            }),
+          });
+        } catch (emailErr) {
+          // Don't fail the booking just because the email failed
+          console.log('Email send failed:', emailErr.message);
+        }
+
         return new Response(JSON.stringify({
           success: true,
           message: `Appointment booked for ${appointment_date} at ${appointment_time}`,
@@ -164,5 +191,3 @@ export default {
     }
   },
 };
-
-  
