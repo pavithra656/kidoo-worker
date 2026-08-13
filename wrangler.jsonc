@@ -1,5 +1,13 @@
 {
-  "name": "kidoo",
+  "name": "kidoo-worker",
   "main": "src/index.js",
-  "compatibility_date": "2024-01-01"
+  "compatibility_date": "2024-01-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kidoo-db",
+      "database_id": "3cb1c162-7787-4551-9888-6018e98b182d"
+    }
+  ]
 }
+
