@@ -16,21 +16,19 @@ export default {
     // One-time setup route: visit this URL once in your browser to create the table.
     // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/setup
     if (request.method === 'GET' && url.pathname === '/setup') {
-      await env.DB.exec(
-        `CREATE TABLE IF NOT EXISTS appointments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          patient_name TEXT NOT NULL,
-          patient_email TEXT NOT NULL,
-          appointment_date TEXT NOT NULL,
-          appointment_time TEXT NOT NULL,
-          reason TEXT,
-          status TEXT NOT NULL DEFAULT 'booked',
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )`
-      );
-      return new Response('Table created (or already existed). Setup done!', {
-        headers: corsHeaders,
-      });
+      try {
+        await env.DB.prepare(
+          "CREATE TABLE IF NOT EXISTS appointments (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_name TEXT NOT NULL, patient_email TEXT NOT NULL, appointment_date TEXT NOT NULL, appointment_time TEXT NOT NULL, reason TEXT, status TEXT NOT NULL DEFAULT 'booked', created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+        ).run();
+        return new Response('Table created (or already existed). Setup done!', {
+          headers: corsHeaders,
+        });
+      } catch (setupErr) {
+        return new Response('Setup error: ' + setupErr.message, {
+          status: 500,
+          headers: corsHeaders,
+        });
+      }
     }
 
     if (request.method !== 'POST') {
