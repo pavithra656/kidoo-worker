@@ -150,7 +150,7 @@
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        throw new Error('Groq failed, falling back to Gemini');
+        throw new Error('Groq status: ' + groqRes.status + ' | Response: ' + JSON.stringify(groqData));
       } catch (groqErr) {
         // Fallback to Gemini
         const systemMsg = history.find(m => m.role === 'system');
