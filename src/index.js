@@ -107,6 +107,24 @@
 
     // View all appointments (simple admin check)
     // GET /appointments
+    // TEMP DEBUG: test Groq directly
+if (request.method === 'GET' && url.pathname === '/debug-groq') {
+  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: 'hello' }],
+    }),
+  });
+  const groqData = await groqRes.json();
+  return new Response(JSON.stringify({ status: groqRes.status, data: groqData }, null, 2), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
     if (request.method === 'GET' && url.pathname === '/appointments') {
       try {
         const { results } = await env.DB.prepare(
