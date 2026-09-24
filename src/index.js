@@ -1,4 +1,4 @@
- export default {
+export default {
   async fetch(request, env) {
     // Allow requests from your GitHub Pages site
     const corsHeaders = {
@@ -76,7 +76,7 @@
               to: 'kidooappointment@gmail.com',
               subject: `New Appointment: ${patient_name} on ${appointment_date}`,
               html: `
-                <h2>New Appointment Booked 📅</h2>
+                <h2>New Appointment Booked ðŸ“…</h2>
                 <p><b>Name:</b> ${patient_name}</p>
                 <p><b>Email:</b> ${patient_email}</p>
                 <p><b>Date:</b> ${appointment_date}</p>
@@ -107,25 +107,6 @@
 
     // View all appointments (simple admin check)
     // GET /appointments
-    // TEMP DEBUG: test Groq directly
-if (request.method === 'GET' && url.pathname === '/debug-groq') {
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${env.GROQ_API_KEY}`,
-    },
-       body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-      messages: [{ role: 'user', content: 'hello' }],
-    }),
-  });
-  });
-  const groqData = await groqRes.json();
-  return new Response(JSON.stringify({ status: groqRes.status, data: groqData }, null, 2), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-}
     if (request.method === 'GET' && url.pathname === '/appointments') {
       try {
         const { results } = await env.DB.prepare(
@@ -140,6 +121,26 @@ if (request.method === 'GET' && url.pathname === '/debug-groq') {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+    }
+
+    // TEMP DEBUG: test Groq directly
+    // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/debug-groq
+    if (request.method === 'GET' && url.pathname === '/debug-groq') {
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      });
+      const groqData = await groqRes.json();
+      return new Response(JSON.stringify({ status: groqRes.status, data: groqData }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (request.method !== 'POST') {
@@ -158,8 +159,11 @@ if (request.method === 'GET' && url.pathname === '/debug-groq') {
             'Authorization': `Bearer ${env.GROQ_API_KEY}`,
           },
           body: JSON.stringify({
-    }),model: 'meta-llama/llama-4-scout-17b-16e-instruct',
- });
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+            messages: history,
+          }),
+        });
+
         const groqData = await groqRes.json();
         if (groqRes.ok && groqData.choices) {
           return new Response(JSON.stringify(groqData), {
@@ -191,7 +195,7 @@ if (request.method === 'GET' && url.pathname === '/debug-groq') {
 
         const geminiData = await geminiRes.json();
         const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
-  || "DEBUG - Gemini status: " + geminiRes.status + " | Response: " + JSON.stringify(geminiData) + " | Groq error was: " + groqErr.message;
+          || "DEBUG - Gemini status: " + geminiRes.status + " | Response: " + JSON.stringify(geminiData) + " | Groq error was: " + groqErr.message;
 
         // Reshape into the same format the frontend expects (OpenAI-style)
         return new Response(JSON.stringify({
