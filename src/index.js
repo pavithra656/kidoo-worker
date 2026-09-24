@@ -1,3 +1,5 @@
+
+Index · JS
 export default {
   async fetch(request, env) {
     // Allow requests from your GitHub Pages site
@@ -6,13 +8,13 @@ export default {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
-
+ 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
-
+ 
     const url = new URL(request.url);
-
+ 
     // One-time setup route: visit this URL once in your browser to create the table.
     // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/setup
     if (request.method === 'GET' && url.pathname === '/setup') {
@@ -30,14 +32,14 @@ export default {
         });
       }
     }
-
+ 
     // Book an appointment: checks the slot is free, then saves it.
     // POST /book with JSON body: { patient_name, patient_email, appointment_date, appointment_time, reason }
     if (request.method === 'POST' && url.pathname === '/book') {
       try {
         const body = await request.json();
         const { patient_name, patient_email, appointment_date, appointment_time, reason } = body;
-
+ 
         // Basic validation - required fields must be present
         if (!patient_name || !patient_email || !appointment_date || !appointment_time) {
           return new Response(JSON.stringify({ error: 'Missing required fields: patient_name, patient_email, appointment_date, appointment_time' }), {
@@ -45,24 +47,24 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-
+ 
         // Check if this exact date+time is already booked (status = 'booked', not cancelled)
         const existing = await env.DB.prepare(
           "SELECT id FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'booked'"
         ).bind(appointment_date, appointment_time).first();
-
+ 
         if (existing) {
           return new Response(JSON.stringify({ error: 'That slot is already booked. Please choose a different time.' }), {
             status: 409,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-
+ 
         // Slot is free - insert the booking
         const result = await env.DB.prepare(
           "INSERT INTO appointments (patient_name, patient_email, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)"
         ).bind(patient_name, patient_email, appointment_date, appointment_time, reason || null).run();
-
+ 
         // Send an email notification (best-effort - booking still succeeds even if email fails)
         try {
           await fetch('https://api.resend.com/emails', {
@@ -89,7 +91,7 @@ export default {
           // Don't fail the booking just because the email failed
           console.log('Email send failed:', emailErr.message);
         }
-
+ 
         return new Response(JSON.stringify({
           success: true,
           message: `Appointment booked for ${appointment_date} at ${appointment_time}`,
@@ -104,7 +106,7 @@ export default {
         });
       }
     }
-
+ 
     // View all appointments (simple admin check)
     // GET /appointments
     if (request.method === 'GET' && url.pathname === '/appointments') {
@@ -122,7 +124,7 @@ export default {
         });
       }
     }
-
+ 
     // TEMP DEBUG: test Groq directly
     // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/debug-groq
     if (request.method === 'GET' && url.pathname === '/debug-groq') {
@@ -142,14 +144,14 @@ export default {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
+ 
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405, headers: corsHeaders });
     }
-
+ 
     try {
       const { history } = await request.json();
-
+ 
       // Try Groq first
       try {
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -163,7 +165,7 @@ export default {
             messages: history,
           }),
         });
-
+ 
         const groqData = await groqRes.json();
         if (groqRes.ok && groqData.choices) {
           return new Response(JSON.stringify(groqData), {
@@ -175,12 +177,12 @@ export default {
         // Fallback to Gemini
         const systemMsg = history.find(m => m.role === 'system');
         const chatMsgs = history.filter(m => m.role !== 'system');
-
+ 
         const geminiContents = chatMsgs.map(m => ({
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }],
         }));
-
+ 
         const geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
@@ -192,11 +194,11 @@ export default {
             }),
           }
         );
-
+ 
         const geminiData = await geminiRes.json();
         const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
           || "DEBUG - Gemini status: " + geminiRes.status + " | Response: " + JSON.stringify(geminiData) + " | Groq error was: " + groqErr.message;
-
+ 
         // Reshape into the same format the frontend expects (OpenAI-style)
         return new Response(JSON.stringify({
           choices: [{ message: { content: reply } }],
@@ -212,3 +214,4 @@ export default {
     }
   },
 };
+ 
