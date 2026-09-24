@@ -1,5 +1,3 @@
-
-Index·JS
 export default {
   async fetch(request, env) {
     // Allow requests from your GitHub Pages site
@@ -8,13 +6,13 @@ export default {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
- 
+
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
- 
+
     const url = new URL(request.url);
- 
+
     // One-time setup route: visit this URL once in your browser to create the table.
     // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/setup
     if (request.method === 'GET' && url.pathname === '/setup') {
@@ -32,14 +30,14 @@ export default {
         });
       }
     }
- 
+
     // Book an appointment: checks the slot is free, then saves it.
     // POST /book with JSON body: { patient_name, patient_email, appointment_date, appointment_time, reason }
     if (request.method === 'POST' && url.pathname === '/book') {
       try {
         const body = await request.json();
         const { patient_name, patient_email, appointment_date, appointment_time, reason } = body;
- 
+
         // Basic validation - required fields must be present
         if (!patient_name || !patient_email || !appointment_date || !appointment_time) {
           return new Response(JSON.stringify({ error: 'Missing required fields: patient_name, patient_email, appointment_date, appointment_time' }), {
@@ -47,27 +45,29 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
- 
+
         // Check if this exact date+time is already booked (status = 'booked', not cancelled)
         const existing = await env.DB.prepare(
           "SELECT id FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'booked'"
         ).bind(appointment_date, appointment_time).first();
- 
+
         if (existing) {
           return new Response(JSON.stringify({ error: 'That slot is already booked. Please choose a different time.' }), {
             status: 409,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
- 
+
         // Slot is free - insert the booking
         const result = await env.DB.prepare(
           "INSERT INTO appointments (patient_name, patient_email, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)"
         ).bind(patient_name, patient_email, appointment_date, appointment_time, reason || null).run();
- 
+
         // Send an email notification (best-effort - booking still succeeds even if email fails)
+        // If it keeps failing, check /debug-email to see the real Resend error.
+        let emailStatus = 'not attempted';
         try {
-          await fetch('https://api.resend.com/emails', {
+          const emailRes = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ export default {
               to: 'kidooappointment@gmail.com',
               subject: `New Appointment: ${patient_name} on ${appointment_date}`,
               html: `
-                <h2>New Appointment Booked ðŸ“…</h2>
+                <h2>New Appointment Booked</h2>
                 <p><b>Name:</b> ${patient_name}</p>
                 <p><b>Email:</b> ${patient_email}</p>
                 <p><b>Date:</b> ${appointment_date}</p>
@@ -87,15 +87,18 @@ export default {
               `,
             }),
           });
+          const emailData = await emailRes.json();
+          emailStatus = emailRes.ok ? 'sent' : 'failed: ' + JSON.stringify(emailData);
         } catch (emailErr) {
           // Don't fail the booking just because the email failed
-          console.log('Email send failed:', emailErr.message);
+          emailStatus = 'failed: ' + emailErr.message;
         }
- 
+
         return new Response(JSON.stringify({
           success: true,
           message: `Appointment booked for ${appointment_date} at ${appointment_time}`,
           appointment_id: result.meta.last_row_id,
+          email_status: emailStatus,
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -106,7 +109,7 @@ export default {
         });
       }
     }
- 
+
     // View all appointments (simple admin check)
     // GET /appointments
     if (request.method === 'GET' && url.pathname === '/appointments') {
@@ -124,7 +127,7 @@ export default {
         });
       }
     }
- 
+
     // TEMP DEBUG: test Groq directly
     // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/debug-groq
     if (request.method === 'GET' && url.pathname === '/debug-groq') {
@@ -135,23 +138,45 @@ export default {
           'Authorization': `Bearer ${env.GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+          model: 'openai/gpt-oss-120b',
           messages: [{ role: 'user', content: 'hello' }],
-        }),  
+        }),
       });
       const groqData = await groqRes.json();
       return new Response(JSON.stringify({ status: groqRes.status, data: groqData }, null, 2), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
- 
+
+    // TEMP DEBUG: test Resend email directly
+    // GET https://kidoo-worker.pavithrasureshguttal.workers.dev/debug-email
+    if (request.method === 'GET' && url.pathname === '/debug-email') {
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        },
+        body: JSON.stringify({
+          from: 'Kidoo <onboarding@resend.dev>',
+          to: 'kidooappointment@gmail.com',
+          subject: 'Kidoo debug test email',
+          html: '<p>This is a test email from the /debug-email route.</p>',
+        }),
+      });
+      const emailData = await emailRes.json();
+      return new Response(JSON.stringify({ status: emailRes.status, data: emailData }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405, headers: corsHeaders });
     }
- 
+
     try {
       const { history } = await request.json();
- 
+
       // Try Groq first
       try {
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -161,11 +186,11 @@ export default {
             'Authorization': `Bearer ${env.GROQ_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+            model: 'openai/gpt-oss-120b',
             messages: history,
           }),
         });
- 
+
         const groqData = await groqRes.json();
         if (groqRes.ok && groqData.choices) {
           return new Response(JSON.stringify(groqData), {
@@ -177,12 +202,12 @@ export default {
         // Fallback to Gemini
         const systemMsg = history.find(m => m.role === 'system');
         const chatMsgs = history.filter(m => m.role !== 'system');
- 
+
         const geminiContents = chatMsgs.map(m => ({
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }],
         }));
- 
+
         const geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
@@ -194,11 +219,11 @@ export default {
             }),
           }
         );
- 
+
         const geminiData = await geminiRes.json();
         const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
-          || "DEBUG - Gemini status: " + geminiRes.status + " | Response: " + JSON.stringify(geminiData) + " | Groq error was: " + groqErr.message;
- 
+          || "Sorry, I'm having trouble right now!";
+
         // Reshape into the same format the frontend expects (OpenAI-style)
         return new Response(JSON.stringify({
           choices: [{ message: { content: reply } }],
@@ -214,4 +239,3 @@ export default {
     }
   },
 };
- 
