@@ -1,5 +1,5 @@
 
-Index · JS
+Index·JS
 export default {
   async fetch(request, env) {
     // Allow requests from your GitHub Pages site
@@ -137,7 +137,7 @@ export default {
         body: JSON.stringify({
           model: 'meta-llama/llama-4-scout-17b-16e-instruct',
           messages: [{ role: 'user', content: 'hello' }],
-        }),
+        }),  
       });
       const groqData = await groqRes.json();
       return new Response(JSON.stringify({ status: groqRes.status, data: groqData }, null, 2), {
