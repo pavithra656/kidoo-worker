@@ -1,4 +1,4 @@
-export default {
+ export default {
   async fetch(request, env) {
     // Allow requests from your GitHub Pages site
     const corsHeaders = {
@@ -174,7 +174,8 @@ export default {
         );
 
         const geminiData = await geminiRes.json();
-        const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I'm having trouble right now!";
+        const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
+  || "DEBUG - Gemini status: " + geminiRes.status + " | Response: " + JSON.stringify(geminiData) + " | Groq error was: " + groqErr.message;
 
         // Reshape into the same format the frontend expects (OpenAI-style)
         return new Response(JSON.stringify({
