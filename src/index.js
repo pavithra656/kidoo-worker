@@ -115,10 +115,11 @@ if (request.method === 'GET' && url.pathname === '/debug-groq') {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${env.GROQ_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+       body: JSON.stringify({
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       messages: [{ role: 'user', content: 'hello' }],
     }),
+  });
   });
   const groqData = await groqRes.json();
   return new Response(JSON.stringify({ status: groqRes.status, data: groqData }, null, 2), {
@@ -157,11 +158,8 @@ if (request.method === 'GET' && url.pathname === '/debug-groq') {
             'Authorization': `Bearer ${env.GROQ_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            messages: history,
-          }),
-        });
-
+    }),model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+ });
         const groqData = await groqRes.json();
         if (groqRes.ok && groqData.choices) {
           return new Response(JSON.stringify(groqData), {
